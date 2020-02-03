@@ -1,7 +1,26 @@
 install.packages('readxl')
 install.packages('tidyverse')
+install.packages('corrplot')
+install.packages('vcd')
+install.packages('alluvial')
+install.packages('caret')
+install.packages('rpart')
+install.packages('rpart.plot')
+install.packages('caret')
+install.packages('e1071')
 library(readxl)
 library(tidyverse)
+library(corrplot)
+library(vcd)
+library(alluvial)
+library(caret)
+# model
+library('rpart')
+library(rpart.plot)
+library(caret)
+library(ggplot2)
+library('e1071')
+
 
 data_t <- read.csv("/Users/miyoungyoon/kaggle/titanic/titanic_data/test.csv")
 data_tr <- read.csv("/Users/miyoungyoon/kaggle/titanic/titanic_data/train.csv")
@@ -221,8 +240,10 @@ crude_summary <- data_tr %>%
   group_by(Survived) %>%
   summarise(n=n()) %>%
   mutate(freq = n/sum(n))
+crude_summary
 
 crude_survrate <- crude_summary$freq[crude_summary$Survived=="Yes"]
+crude_survrate
 
 #EDA
 #Pclass
@@ -275,9 +296,171 @@ names(data_tr)
 data_tr$`Age Group`<-as.factor(data_tr$`Age Group`)
 ggplot(data_tr, aes(x='Age Group', fill=Survived)) +
   geom_bar(position="stack") 
-  
+
+class(data_tr$`Age Group`)  
 levels(data_tr$`Age Group`)
 #나이 그룹이 4가지인데, x축에 안 나오고 있음. 이유를 모르겠음. 
+ggplot(data_tr, aes(x='Age Group', fill=Survived)) +
+  geom_bar(position="fill") +
+  scale_fill_brewer(palette = "Set1") +
+  scale_y_continuous(labels=scales::percent) +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2) +
+  ggtitle("Survival Rate by Age Group") 
 
 
+# 안됨
+ggplot(data_tr %>% filter('Age Group' == "Age.0012") , aes(x='Age Group', fill=Survived)) +
+  geom_bar(position="fill") +
+  scale_fill_brewer(palette = "Set1") +
+  scale_y_continuous(labels=scales::percent) +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2) +
+  ggtitle("Survival Rate by Age Group") 
+
+
+# 형제/배우자 
+class(data_tr$SibSp)
+data_tr$SibSp
+ggplot(data_tr, aes(factor(SibSp), fill=Survived)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=scales::percent) +
+  ylab("Survival Rate") + 
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2) +
+  ggtitle("Survival rate by SibSp")
+#형제가 5,6명 되는가족은 전혀 생존하지 못 한 이유가 뭐지? 
+data_tr %>% filter(SibSp>=5)
+
+
+#자식/부모 - 나의 자식, 부모라는 것이겠지? 
+class(data_tr$Parch)
+ggplot(data_tr, aes(factor(Parch), fill=Survived)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=scales::percent) +
+  ylab("Survival Rate") + 
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2) +
+  ggtitle("Survival rate by Parch")
+
+#승선한 항구 - ML에 큰 영향을 줄 것 같은 변수가 아닐 것 같음. 
+str(data_tr$Embarked)
+ggplot(data_tr, aes(Embarked, fill=Survived)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=scales::percent) +
+  ylab("Survival Rate") + 
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2) +
+  ggtitle("Survival rate by Embarked")
+
+#title - Miss, Mrs, Rare title 의 생존이 freq = n/sum(n) 보다 이상임을 확인 
+str(data_tr$title)
+ggplot(data_tr, aes(title, fill=Survived))+
+  geom_bar(position="fill") +
+  scale_y_continuous(labels = scales::percent) +
+  ylab("Survial Rate") +
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2)+
+  ggtitle("Survival rate by title")
+
+# FamilySized
+str(data_tr$FamilySized)
+ggplot(data_tr, aes(FamilySized, fill=Survived)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels = scales::percent) +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2)+
+  ggtitle("Survival rate by FamilySized")
+
+str(data_tr$Fsize)
+ggplot(data_tr, aes(factor(Fsize), fill=Survived)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels = scales::percent) +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survrate, col="white", lty=2, size=2)+
+  ggtitle("Survival rate by FamilySized")
+
+
+#Correlation Plot
+tbl_corr <- data_tr %>%
+  select(-PassengerId, -SibSp, -Parch) %>%
+  select_if(is.numeric) %>%
+  cor(use="complete.obs") %>%
+  corrplot.mixed(tl.cex=0.85)
+  
+View(tbl_corr)
+
+#Mosaic plot - 카테고리 데이터 탐색에 용이함 
+tbl_mosaic <- data_tr %>%
+  select(Survived, Pclass, Sex, AgeGroup='Age Group', title, Embarked, 'FamilySized') %>%
+  mutate_all(as.factor)
+head(tbl_mosaic)
+
+# mosaic 챠트 쓰려면 vcd(Visualizing Categorical Data)패키지 설치 필요 
+mosaic(~Pclass+Sex+Survived, data=tbl_mosaic, shade=TRUE, legend=TRUE)
+
+
+#alluvial diagram
+tbl_summary <- data_tr %>%
+  group_by(Survived, Sex, Pclass, 'Age Group', title) %>%
+  summarise(N=n()) %>%
+  ungroup %>%
+  na.omit
+
+tbl_summary
+
+
+alluvial(tbl_summary[, c(1:4)],
+  freq=tbl_summary$N, border=NA,
+  col=ifelse(tbl_summary$Survived == "Yes", "Red", "Gray"),
+  cex=0.68, #cex는 라벨의 폰트 크기 
+  ordering = list(
+    order(tbl_summary$Survived, tbl_summary$Pclass==1),
+    order(tbl_summary$Sex, tbl_summary$Pclass==1),
+    NULL,
+    NULL))
+
+
+#Machine learning
+# 준비 데이터: “Pclass”, “title”,“Sex”,“Embarked”,“FamilySized”,“ticket.size”
+
+feature1<-data_tr[1:891, c("Pclass", "title", "Sex", "Embarked", "FamilySized", "ticket.size")]
+response <- as.factor(data_tr$Survived)
+feature1$Survived=as.factor(data_tr$Survived)
+
+set.seed(500)
+# createDataPartition 은 학습데이터와 테스트 데이터 분리에 사용하는 함수 
+ind=createDataPartition(feature1$Survived, times=1, p=0.8, list=FALSE)
+head(ind)
+#학습데이터와 테스트 데이터 분리 
+train_val=feature1[ind,]
+test_val=feature1[-ind]
+
+#비율 확인 
+round(prop.table(table(train$Survived)*100), digits=1)
+
+# Predictive Analysis 
+# Decision tree
+set.seed(1234)
+Model_DT=rpart(Survived~., data=train_val, method='class')
+
+rpart.plot(Model_DT, extra=3, fallen.leaves=F)
+
+PRE_TDT=predict(Model_DT, data=train_val, type="class")
+confusionMatrix(PRE_TDT, train_val$Survived)
+# confusionMatrix 돌린후 Accuracy is 0.8432 나옴. 3개 변수로 예측
+
+# 
+set.seed(1234)
+cv.10 <- createMultiFolds(train_val$Survived, k=10, times=10)
+
+ctrl<-trainControl(method="repeatedcv", number=10, repeats=10, index=cv.10)
+
+tain_val <- as.data.frame(train_val)
+
+Model_CDT <- train(x=train_val[,-7], y=train_val[,7], method='rpart', tuneLength=30, 
+                   trControl=ctrl)
+
+rpart.plot(Model_CDT$finalModel, extra=3, fallen.leaves = FALSE)
+
+# 
+PRE_VDTS=predict(Model_CDT$finalModel,newdata=test_val,type="class")
+
+confusionMatrix(PRE_VDTS,test_val$Survived)
 
